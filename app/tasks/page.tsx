@@ -256,21 +256,14 @@ function TaskRow({
   onUpdateSyncToGoogle,
   onSyncToGoogleNow,
 }: {
-  task: {
-    id: string;
-    title: string;
-    category: TaskCategory;
-    dueTime?: Date;
-    repeat?: RepeatRule;
-    syncToGoogle?: boolean;
-  };
+  task: Task;
   onComplete: () => void;
   onDelete: () => void;
   onMoveCategory: (c: TaskCategory) => void;
   onUpdateDueTime: (dueTime: Date | undefined) => void;
   onUpdateRepeat: (repeat: RepeatRule | undefined) => void;
   onUpdateSyncToGoogle: (syncToGoogle: boolean) => void;
-  onSyncToGoogleNow?: (task: { id: string; title: string; dueTime?: Date; repeat?: RepeatRule; googleEventId?: string }) => void;
+  onSyncToGoogleNow?: (task: Task) => void | Promise<void>;
 }) {
   const showDue = task.category === "scheduled" || task.category === "backlog";
   const dueLocalValue = task.dueTime
