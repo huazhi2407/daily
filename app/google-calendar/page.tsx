@@ -10,12 +10,13 @@ import { getEffectiveDueTime } from "@/lib/utils/recurrence";
 
 function GoogleCalendarContent() {
   const searchParams = useSearchParams();
-  const { tasks, updateTask } = useTasks();
+  const { tasks, updateTask, addTask } = useTasks();
   const {
     connected,
     checkStatus,
     disconnect,
     createEvent,
+    fetchEvents,
     error: syncError,
   } = useGoogleCalendarSync();
   const { embedUrl, setEmbedUrl } = useGoogleCalendarEmbed();
@@ -23,6 +24,11 @@ function GoogleCalendarContent() {
   const [message, setMessage] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
+  /** 從 Google 匯入到 app：載入的活動列表 */
+  const [importEvents, setImportEvents] = useState<Array<{ id: string; summary: string; start: string; end: string; htmlLink?: string }>>([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [addingEventId, setAddingEventId] = useState<string | null>(null);
+  const [addingAll, setAddingAll] = useState(false);
 
   useEffect(() => {
     if (embedUrl != null) setEmbedInput(embedUrl);
@@ -86,6 +92,65 @@ function GoogleCalendarContent() {
       setSyncingAll(false);
     }
   }, [pendingSyncTasks, createEvent, updateTask]);
+
+  /** 載入未來 30 天 Google 活動，供匯入到 app */
+  const loadImportEvents = useCallback(async () => {
+    setImportLoading(true);
+    setImportEvents([]);
+    try {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setDate(end.getDate() + 30);
+      end.setHours(23, 59, 59, 999);
+      const list = await fetchEvents(start.toISOString(), end.toISOString());
+      setImportEvents(list ?? []);
+    } finally {
+      setImportLoading(false);
+    }
+  }, [fetchEvents]);
+
+  /** 已存在於 app 的 Google 活動（有對應任務）不顯示在匯入列表 */
+  const importEventsFiltered = importEvents.filter(
+    (ev) => !tasks.some((t) => t.googleEventId === ev.id)
+  );
+
+  const handleAddGoogleEventToTasks = useCallback(
+    async (ev: { id: string; summary: string; start: string; end: string; htmlLink?: string }) => {
+      setAddingEventId(ev.id);
+      try {
+        await addTask({
+          title: ev.summary,
+          dueTime: new Date(ev.start),
+          category: "scheduled",
+          googleEventId: ev.id,
+          googleEventLink: ev.htmlLink,
+        });
+        setImportEvents((prev) => prev.filter((e) => e.id !== ev.id));
+      } finally {
+        setAddingEventId(null);
+      }
+    },
+    [addTask]
+  );
+
+  const handleAddAllImportEvents = useCallback(async () => {
+    setAddingAll(true);
+    try {
+      for (const ev of importEventsFiltered) {
+        await addTask({
+          title: ev.summary,
+          dueTime: new Date(ev.start),
+          category: "scheduled",
+          googleEventId: ev.id,
+          googleEventLink: ev.htmlLink,
+        });
+      }
+      setImportEvents([]);
+    } finally {
+      setAddingAll(false);
+    }
+  }, [importEventsFiltered, addTask]);
 
   const formatDue = (t: Task) =>
     t.dueTime ? t.dueTime.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
@@ -210,6 +275,68 @@ function GoogleCalendarContent() {
                     ))}
                   </ul>
                 </>
+              )}
+            </section>
+
+            {/* 從 Google 日曆匯入到 app */}
+            <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+              <h2 className="mb-3 text-sm font-medium text-zinc-400">從 Google 日曆匯入到 app</h2>
+              <p className="mb-3 text-sm text-zinc-500">
+                載入未來 30 天的 Google 日曆活動，加入為 app 任務後會出現在 <Link href="/tasks" className="text-indigo-400 underline">任務</Link> 與 <Link href="/calendar" className="text-indigo-400 underline">日曆</Link> 頁。
+              </p>
+              <button
+                type="button"
+                onClick={loadImportEvents}
+                disabled={importLoading}
+                className="mb-3 rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                {importLoading ? "載入中…" : "載入未來 30 天活動"}
+              </button>
+              {importEventsFiltered.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleAddAllImportEvents}
+                    disabled={addingAll}
+                    className="ml-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    {addingAll ? "加入中…" : `全部加入為任務（${importEventsFiltered.length} 筆）`}
+                  </button>
+                  <ul className="mt-3 space-y-2">
+                    {importEventsFiltered.map((ev) => {
+                      const startDate = new Date(ev.start);
+                      const timeStr = startDate.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+                      const isAdding = addingEventId === ev.id;
+                      return (
+                        <li
+                          key={ev.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-700/60 px-3 py-2 text-sm"
+                        >
+                          <span className="text-zinc-200">{ev.summary}</span>
+                          <span className="text-zinc-500">{timeStr}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAddGoogleEventToTasks(ev)}
+                              disabled={isAdding}
+                              className="rounded border border-zinc-600 px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+                            >
+                              {isAdding ? "加入中…" : "加入任務"}
+                            </button>
+                            {ev.htmlLink && (
+                              <a href={ev.htmlLink} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-400 hover:underline">
+                                Google 開啟
+                              </a>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+              {importEvents.length > 0 && importEventsFiltered.length === 0 && (
+                <p className="text-sm text-zinc-500">這 30 天內的活動都已加入 app，無需再匯入。</p>
               )}
             </section>
           </>
