@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { PageShell } from "@/components/layout";
 import { useTasks, useGoogleCalendarSync } from "@/hooks";
 import type { Task } from "@/types";
@@ -14,8 +14,22 @@ export default function CalendarPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const { tasks, updateTask } = useTasks();
+  const { tasks, updateTask, addTask } = useTasks();
   const { connected: syncConnected, events: googleEventsForDay, fetchEvents, createEvent } = useGoogleCalendarSync();
+
+  const handleAddGoogleEventToTasks = useCallback(
+    async (ev: { id: string; summary: string; start: string; end: string; htmlLink?: string }) => {
+      const dueTime = new Date(ev.start);
+      await addTask({
+        title: ev.summary,
+        dueTime,
+        category: "scheduled",
+        googleEventId: ev.id,
+        googleEventLink: ev.htmlLink,
+      });
+    },
+    [addTask]
+  );
 
   const handleSyncTaskToGoogle = useMemo(() => {
     if (!syncConnected) return undefined;
@@ -157,6 +171,7 @@ export default function CalendarPage() {
               date={selectedDate}
               googleEvents={syncConnected ? googleEventsForDay : []}
               onSyncTaskToGoogle={handleSyncTaskToGoogle}
+              onAddGoogleEventToTasks={handleAddGoogleEventToTasks}
             />
           </section>
         )}
@@ -170,11 +185,13 @@ function DayTimeline({
   date,
   googleEvents,
   onSyncTaskToGoogle,
+  onAddGoogleEventToTasks,
 }: {
   tasks: Task[];
   date: Date;
   googleEvents: Array<{ id: string; summary: string; start: string; end: string; htmlLink?: string }>;
   onSyncTaskToGoogle?: (task: Task, start: Date, end: Date) => Promise<void>;
+  onAddGoogleEventToTasks?: (ev: { id: string; summary: string; start: string; end: string; htmlLink?: string }) => Promise<void>;
 }) {
   /** 已對應到本機任務的 Google 活動不重複顯示（有存 googleEventId 或同標題+同時段視為同一筆） */
   const googleEventsFiltered = useMemo(() => {
@@ -209,6 +226,7 @@ function DayTimeline({
   ].sort((a, b) => a.sortTime - b.sortTime);
 
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [addingEventId, setAddingEventId] = useState<string | null>(null);
 
   return (
     <div className="relative">
@@ -277,6 +295,16 @@ function DayTimeline({
           }
           const ev = item.event;
           const timeLabel = ev.start ? formatTime(new Date(ev.start)) : "—";
+          const isAdding = addingEventId === ev.id;
+          const handleAddToTasks = async () => {
+            if (!onAddGoogleEventToTasks) return;
+            setAddingEventId(ev.id);
+            try {
+              await onAddGoogleEventToTasks(ev);
+            } finally {
+              setAddingEventId(null);
+            }
+          };
           return (
             <li key={`google-${ev.id}`} className="relative flex items-start gap-3 py-2 pl-0">
               <span className="absolute left-0 w-10 shrink-0 text-right text-xs tabular-nums text-zinc-500">
@@ -286,16 +314,28 @@ function DayTimeline({
               <div className="ml-14 min-w-0 flex-1 rounded-lg border border-zinc-700/60 bg-zinc-800/50 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium text-zinc-200">{ev.summary}</p>
-                  {ev.htmlLink && (
-                    <a
-                      href={ev.htmlLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 text-xs text-emerald-400 hover:underline"
-                    >
-                      Google 開啟
-                    </a>
-                  )}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {onAddGoogleEventToTasks && (
+                      <button
+                        type="button"
+                        onClick={handleAddToTasks}
+                        disabled={isAdding}
+                        className="rounded border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-700 hover:text-white disabled:opacity-50"
+                      >
+                        {isAdding ? "加入中…" : "加入任務"}
+                      </button>
+                    )}
+                    {ev.htmlLink && (
+                      <a
+                        href={ev.htmlLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-emerald-400 hover:underline"
+                      >
+                        Google 開啟
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-500">Google 日曆</p>
               </div>

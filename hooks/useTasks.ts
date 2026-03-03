@@ -47,6 +47,9 @@ export function useTasks() {
       dueTime?: Date;
       repeat?: RepeatRule;
       syncToGoogle?: boolean;
+      /** 從 Google 日曆加入時可帶入，避免重複顯示並保留連結 */
+      googleEventId?: string;
+      googleEventLink?: string;
     }) => {
       const category = payload.category ?? "backlog";
       const active = [...tasks];
@@ -61,6 +64,8 @@ export function useTasks() {
         dueTime: payload.dueTime,
         repeat: payload.repeat,
         syncToGoogle: payload.syncToGoogle,
+        googleEventId: payload.googleEventId,
+        googleEventLink: payload.googleEventLink,
         category,
         reminderOffsets: [],
         completed: false,
