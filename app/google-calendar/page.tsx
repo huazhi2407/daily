@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageShell } from "@/components/layout";
@@ -8,7 +8,7 @@ import { useTasks, useGoogleCalendarSync, useGoogleCalendarEmbed } from "@/hooks
 import type { Task } from "@/types";
 import { getEffectiveDueTime } from "@/lib/utils/recurrence";
 
-export default function GoogleCalendarPage() {
+function GoogleCalendarContent() {
   const searchParams = useSearchParams();
   const { tasks, updateTask } = useTasks();
   const {
@@ -220,5 +220,19 @@ export default function GoogleCalendarPage() {
         </p>
       </div>
     </PageShell>
+  );
+}
+
+export default function GoogleCalendarPage() {
+  return (
+    <Suspense
+      fallback={
+        <PageShell title="Google 日曆">
+          <div className="flex items-center justify-center py-12 text-zinc-500">載入中…</div>
+        </PageShell>
+      }
+    >
+      <GoogleCalendarContent />
+    </Suspense>
   );
 }
