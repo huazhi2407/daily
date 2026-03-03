@@ -1,3 +1,35 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --surface: #0f0f12;
+  --surface-alt: #18181c;
+  --border: #2a2a2e;
+  --accent: #6366f1;
+  --muted: #71717a;
+}
+
+body {
+  @apply bg-[var(--surface)] text-zinc-100 antialiased;
+}
+
+.card {
+  @apply rounded-xl border border-[var(--border)] bg-[var(--surface-alt)] p-4 shadow-sm;
+}
+
+.input {
+  @apply w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)];
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors;
+}
+
+.btn-primary {
+  @apply btn bg-[var(--accent)] text-white hover:opacity-90;
+}
+
+.btn-ghost {
+  @apply btn text-zinc-400 hover:bg-white/5 hover:text-zinc-200;
+}
