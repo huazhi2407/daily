@@ -8,6 +8,7 @@ const navItems = [
   { href: "/tasks", label: "任務", icon: "☑" },
   { href: "/calendar", label: "日曆", icon: "📅" },
   { href: "/google-calendar", label: "Google", icon: "📆" },
+  { href: "/settings", label: "設定", icon: "⚙" },
   { href: "/log", label: "時間記錄", icon: "⏱" },
   { href: "/board", label: "白板", icon: "▦" },
 ] as const;
