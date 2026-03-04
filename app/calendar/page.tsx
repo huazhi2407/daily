@@ -14,6 +14,7 @@ export default function CalendarPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const { tasks, updateTask, addTask } = useTasks();
   const { connected: syncConnected, events: googleEventsForDay, fetchEvents, createEvent } = useGoogleCalendarSync();
 
@@ -140,7 +141,10 @@ export default function CalendarPage() {
               <button
                 key={d}
                 type="button"
-                onClick={() => setSelectedDate(date)}
+                onClick={() => {
+                  setSelectedDate(date);
+                  setShowScheduleModal(true);
+                }}
                 className={`aspect-square rounded text-sm ${
                   isSelected
                     ? "bg-indigo-600 text-white"
@@ -160,20 +164,57 @@ export default function CalendarPage() {
           })}
         </div>
 
-        {selectedDate &&
-          (selectedTasksTimeline.length > 0 || (syncConnected && googleEventsForDay.length > 0)) && (
-          <section className="rounded-xl border border-zinc-800 p-4">
-            <h3 className="mb-3 text-sm font-medium text-zinc-400">
-              {selectedDate.toLocaleDateString("zh-TW")} 時間線
-            </h3>
-            <DayTimeline
-              tasks={selectedTasksTimeline}
-              date={selectedDate}
-              googleEvents={syncConnected ? googleEventsForDay : []}
-              onSyncTaskToGoogle={handleSyncTaskToGoogle}
-              onAddGoogleEventToTasks={handleAddGoogleEventToTasks}
-            />
-          </section>
+        {selectedDate && (
+          <button
+            type="button"
+            onClick={() => setShowScheduleModal(true)}
+            className="rounded-lg border border-zinc-700 bg-zinc-800/50 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            {selectedDate.toLocaleDateString("zh-TW")} 時間表
+          </button>
+        )}
+
+        {showScheduleModal && selectedDate && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setShowScheduleModal(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="當日時間表"
+          >
+            <div
+              className="max-h-[85vh] w-full max-w-lg overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
+                <h3 className="text-sm font-medium text-zinc-200">
+                  {selectedDate.toLocaleDateString("zh-TW", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} 時間表
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleModal(false)}
+                  className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                  aria-label="關閉"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto p-4">
+                {selectedTasksTimeline.length > 0 || (syncConnected && googleEventsForDay.length > 0) ? (
+                  <DayTimeline
+                    tasks={selectedTasksTimeline}
+                    date={selectedDate}
+                    googleEvents={syncConnected ? googleEventsForDay : []}
+                    onSyncTaskToGoogle={handleSyncTaskToGoogle}
+                    onAddGoogleEventToTasks={handleAddGoogleEventToTasks}
+                    onUpdateTask={updateTask}
+                  />
+                ) : (
+                  <p className="text-sm text-zinc-500">當日尚無排程活動</p>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </PageShell>
@@ -186,12 +227,14 @@ function DayTimeline({
   googleEvents,
   onSyncTaskToGoogle,
   onAddGoogleEventToTasks,
+  onUpdateTask,
 }: {
   tasks: Task[];
   date: Date;
   googleEvents: Array<{ id: string; summary: string; start: string; end: string; htmlLink?: string }>;
   onSyncTaskToGoogle?: (task: Task, start: Date, end: Date) => Promise<void>;
   onAddGoogleEventToTasks?: (ev: { id: string; summary: string; start: string; end: string; htmlLink?: string }) => Promise<void>;
+  onUpdateTask?: (id: string, updates: { title?: string; dueTime?: Date }) => void | Promise<void>;
 }) {
   /** 已對應到本機任務的 Google 活動不重複顯示（有存 googleEventId 或同標題+同時段視為同一筆） */
   const googleEventsFiltered = useMemo(() => {
@@ -227,6 +270,9 @@ function DayTimeline({
 
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [addingEventId, setAddingEventId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDueTime, setEditDueTime] = useState("");
 
   return (
     <div className="relative">
@@ -252,6 +298,24 @@ function DayTimeline({
                 setSyncingId(null);
               }
             };
+            const isEditing = editingTaskId === t.id;
+            const startEdit = () => {
+              setEditingTaskId(t.id);
+              setEditTitle(t.title);
+              const dt = effectiveTime ? new Date(effectiveTime.getTime() - effectiveTime.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+              setEditDueTime(dt);
+            };
+            const saveEdit = async () => {
+              if (onUpdateTask) {
+                await onUpdateTask(t.id, {
+                  title: editTitle.trim() || t.title,
+                  dueTime: editDueTime ? new Date(editDueTime) : t.dueTime,
+                });
+                setEditingTaskId(null);
+              }
+            };
+            const cancelEdit = () => setEditingTaskId(null);
+
             return (
               <li key={`local-${t.id}`} className="relative flex items-start gap-3 py-2 pl-0">
                 <span className="absolute left-0 w-10 shrink-0 text-right text-xs tabular-nums text-zinc-500">
@@ -259,35 +323,82 @@ function DayTimeline({
                 </span>
                 <span className="absolute left-[38px] top-4 h-2 w-2 shrink-0 rounded-full bg-indigo-500 ring-2 ring-zinc-900" aria-hidden />
                 <div className="ml-14 min-w-0 flex-1 rounded-lg border border-zinc-700/60 bg-zinc-800/50 px-3 py-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-zinc-200">{t.title}</p>
-                    {alreadySynced ? (
-                      <span className="shrink-0 text-xs text-emerald-400">
-                        {t.googleEventLink ? (
-                          <a href={t.googleEventLink} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                            已同步 · Google 開啟
-                          </a>
-                        ) : (
-                          "已同步"
-                        )}
-                      </span>
-                    ) : canSync ? (
-                      <button
-                        type="button"
-                        onClick={handleSync}
-                        disabled={!!syncingId}
-                        className="shrink-0 rounded border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-700 hover:text-white disabled:opacity-50"
-                      >
-                        {syncingId === t.id ? "同步中…" : "同步到 Google"}
-                      </button>
-                    ) : null}
-                  </div>
-                  {isRecurring && t.repeat && (
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      {t.repeat.type === "daily"
-                        ? "每天"
-                        : `每週 ${[...t.repeat.weekdays].sort((a, b) => a - b).map((d) => "日一二三四五六"[d]).join("、")}`}
-                    </p>
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-sm text-zinc-200"
+                        placeholder="標題"
+                      />
+                      <input
+                        type="datetime-local"
+                        value={editDueTime}
+                        onChange={(e) => setEditDueTime(e.target.value)}
+                        className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-sm text-zinc-200"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={saveEdit}
+                          className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500"
+                        >
+                          儲存
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="rounded border border-zinc-600 px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-700"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-zinc-200">{t.title}</p>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {onUpdateTask && (
+                            <button
+                              type="button"
+                              onClick={startEdit}
+                              className="rounded border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                            >
+                              編輯
+                            </button>
+                          )}
+                          {alreadySynced ? (
+                            <span className="text-xs text-emerald-400">
+                              {t.googleEventLink ? (
+                                <a href={t.googleEventLink} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                  已同步 · Google 開啟
+                                </a>
+                              ) : (
+                                "已同步"
+                              )}
+                            </span>
+                          ) : canSync ? (
+                            <button
+                              type="button"
+                              onClick={handleSync}
+                              disabled={!!syncingId}
+                              className="rounded border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-700 hover:text-white disabled:opacity-50"
+                            >
+                              {syncingId === t.id ? "同步中…" : "同步到 Google"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {isRecurring && t.repeat && (
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          {t.repeat.type === "daily"
+                            ? "每天"
+                            : `每週 ${[...t.repeat.weekdays].sort((a, b) => a - b).map((d) => "日一二三四五六"[d]).join("、")}`}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </li>
