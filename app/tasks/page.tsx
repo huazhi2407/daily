@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import { PageShell } from "@/components/layout";
 import { useTasks, useGoogleCalendarSync } from "@/hooks";
 import type { Task, TaskCategory } from "@/types";
 import type { RepeatRule } from "@/types/task";
+import type { BoardCard } from "@/types/board";
 import { getEffectiveDueTime } from "@/lib/utils/recurrence";
+import { getPersistence, PERSISTENCE_KEYS } from "@/lib/persistence";
+import { generateId } from "@/types/common";
 
 const CATEGORY_LABELS: Record<TaskCategory, string> = {
   top3: "Top 3",
@@ -38,6 +42,7 @@ export default function TasksPage() {
   const [newRepeatWeekdays, setNewRepeatWeekdays] = useState<number[]>([1, 2, 3, 4, 5]); // 一～五
   const [newSyncToGoogle, setNewSyncToGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addedToBoardMessage, setAddedToBoardMessage] = useState(false);
 
   const showDueInput = newCategory === "scheduled" || newCategory === "backlog";
 
@@ -98,6 +103,21 @@ export default function TasksPage() {
     },
     [syncConnected, updateTask, updateEvent]
   );
+
+  /** 將任務轉成便籤加入白板 */
+  const handleAddTaskToBoard = useCallback(async (task: Task) => {
+    const p = getPersistence();
+    const cards = (await p.get<BoardCard[]>(PERSISTENCE_KEYS.BOARD)) ?? [];
+    const newCard: BoardCard = {
+      id: generateId(),
+      x: 20 + cards.length * 15,
+      y: 20 + cards.length * 15,
+      content: task.title,
+    };
+    await p.set(PERSISTENCE_KEYS.BOARD, [...cards, newCard]);
+    setAddedToBoardMessage(true);
+    setTimeout(() => setAddedToBoardMessage(false), 3000);
+  }, []);
 
   return (
     <PageShell title="任務">
@@ -183,6 +203,11 @@ export default function TasksPage() {
           )}
         </div>
         {error && <p className="text-sm text-red-400">{error}</p>}
+        {addedToBoardMessage && (
+          <p className="text-sm text-indigo-400">
+            已加入白板 · <Link href="/board" className="underline hover:text-indigo-300">前往白板</Link>
+          </p>
+        )}
 
         {loading ? (
           <p className="text-sm text-zinc-500">載入中...</p>
@@ -208,6 +233,7 @@ export default function TasksPage() {
                           onUpdateDueTime={(dueTime) => handleUpdateDueTime(t, dueTime)}
                           onUpdateRepeat={(repeat) => updateTask(t.id, { repeat })}
                           onUpdateSyncToGoogle={(syncToGoogle) => updateTask(t.id, { syncToGoogle })}
+                          onAddToBoard={() => handleAddTaskToBoard(t)}
                           onSyncToGoogleNow={syncConnected ? handleSyncToGoogleNow : undefined}
                         />
                       ))}
@@ -228,6 +254,15 @@ export default function TasksPage() {
                     >
                       <span className="line-through">{t.title}</span>
                       <div className="flex gap-1">
+                        <button
+                          onClick={async () => {
+                            await handleAddTaskToBoard(t);
+                          }}
+                          className="text-indigo-400 hover:text-indigo-300"
+                          title="轉成便籤加入白板"
+                        >
+                          加入白板
+                        </button>
                         <button
                           onClick={() => uncompleteTask(t.id)}
                           className="text-zinc-400 hover:text-white"
@@ -269,6 +304,7 @@ function TaskRow({
   onUpdateDueTime,
   onUpdateRepeat,
   onUpdateSyncToGoogle,
+  onAddToBoard,
   onSyncToGoogleNow,
 }: {
   task: Task;
@@ -278,6 +314,7 @@ function TaskRow({
   onUpdateDueTime: (dueTime: Date | undefined) => void;
   onUpdateRepeat: (repeat: RepeatRule | undefined) => void;
   onUpdateSyncToGoogle: (syncToGoogle: boolean) => void;
+  onAddToBoard: () => void | Promise<void>;
   onSyncToGoogleNow?: (task: Task) => void | Promise<void>;
 }) {
   const showDue = task.category === "scheduled" || task.category === "backlog";
@@ -378,6 +415,14 @@ function TaskRow({
             Google
           </label>
         )}
+        <button
+          type="button"
+          onClick={onAddToBoard}
+          className="rounded border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-indigo-400"
+          title="轉成便籤加入白板"
+        >
+          加入白板
+        </button>
         <select
           value={task.category}
           onChange={(e) => onMoveCategory(e.target.value as TaskCategory)}
