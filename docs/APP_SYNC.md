@@ -59,10 +59,16 @@ create policy "Users can delete own data"
   using (auth.uid() = user_id);
 ```
 
-### 4. 登入方式（Magic Link）
+### 4. 登入方式（二選一）
 
-- 在 app **設定** 頁的「帳號與同步」區塊輸入 **Email**，點「發送登入連結」。
-- 到信箱點擊連結後會回到 app 並完成登入。
+**推薦：帳號密碼**（不用收信、無發信額度問題）
+
+- 在 app **設定** 頁的「帳號與同步」→ 選 **帳號密碼**，輸入 Email 與密碼。
+- 第一次使用請點「註冊」，之後在手機與電腦都點「登入」、輸入同一組帳密即可。
+
+**選用：登入連結（Magic Link）**
+
+- 選 **登入連結（寄信）**，輸入 Email 後點「發送登入連結」，到信箱點連結完成登入。
 - 在 **Supabase 專案 → Authentication → URL Configuration** 中，**Redirect URLs** 需加入：
   - 本機：`http://localhost:3000/auth/callback`
   - 正式站：`https://你的網域/auth/callback`

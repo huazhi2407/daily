@@ -15,6 +15,8 @@ export default function SettingsPage() {
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
   const [syncUser, setSyncUser] = useState<User | null | undefined>(undefined);
   const [syncEmail, setSyncEmail] = useState("");
+  const [syncPassword, setSyncPassword] = useState("");
+  const [syncAuthMode, setSyncAuthMode] = useState<"password" | "magiclink">("password");
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
 
@@ -147,53 +149,126 @@ export default function SettingsPage() {
           {syncUser === undefined ? (
             <p className="text-sm text-zinc-500">載入中…</p>
           ) : syncUser === null ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {syncMessage && (
                 <p className="text-sm text-amber-400">{syncMessage}</p>
               )}
-              <div className="flex flex-wrap gap-2">
-                <input
-                  type="email"
-                  value={syncEmail}
-                  onChange={(e) => setSyncEmail(e.target.value)}
-                  placeholder="Email"
-                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-                />
+              <div className="flex gap-2 border-b border-zinc-700 pb-2">
                 <button
-                  onClick={async () => {
-                    const supabase = createClient();
-                    if (!supabase || !syncEmail.trim()) return;
-                    setSyncLoading(true);
-                    setSyncMessage(null);
-                    // 用正式站網址當導向，信箱裡的連結在手機點開才能正確跳到 app（若用 localhost 手機無法開）
-                    const baseUrl =
-                      (typeof window !== "undefined" && process.env.NEXT_PUBLIC_APP_URL) ||
-                      (typeof window !== "undefined" ? window.location.origin : "") ||
-                      "";
-                    const { error } = await supabase.auth.signInWithOtp({
-                      email: syncEmail.trim(),
-                      options: {
-                        emailRedirectTo: `${baseUrl}/auth/callback?next=/settings`,
-                      },
-                    });
-                    setSyncLoading(false);
-                    if (error) {
-                      const msg = error.message || "";
-                      if (msg.toLowerCase().includes("rate limit") || msg.includes("429")) {
-                        setSyncMessage("發送次數過多：同一信箱需間隔約 1 分鐘；Supabase 免費額度每小時約 2 封，請稍後再試或設定自訂 SMTP。");
-                      } else {
-                        setSyncMessage(error.message);
-                      }
-                    } else {
-                      setSyncMessage("已發送登入連結到你的信箱，請點擊連結完成登入。");
-                    }
-                  }}
-                  disabled={syncLoading || !syncEmail.trim()}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+                  type="button"
+                  onClick={() => { setSyncAuthMode("password"); setSyncMessage(null); }}
+                  className={`rounded px-3 py-1.5 text-sm ${syncAuthMode === "password" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"}`}
                 >
-                  {syncLoading ? "發送中…" : "發送登入連結"}
+                  帳號密碼
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSyncAuthMode("magiclink"); setSyncMessage(null); }}
+                  className={`rounded px-3 py-1.5 text-sm ${syncAuthMode === "magiclink" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"}`}
+                >
+                  登入連結（寄信）
                 </button>
               </div>
+              {syncAuthMode === "password" ? (
+                <div className="space-y-2">
+                  <input
+                    type="email"
+                    value={syncEmail}
+                    onChange={(e) => setSyncEmail(e.target.value)}
+                    placeholder="Email"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={syncPassword}
+                    onChange={(e) => setSyncPassword(e.target.value)}
+                    placeholder="密碼"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={async () => {
+                        const supabase = createClient();
+                        if (!supabase || !syncEmail.trim() || !syncPassword) return;
+                        setSyncLoading(true);
+                        setSyncMessage(null);
+                        const { data, error } = await supabase.auth.signInWithPassword({
+                          email: syncEmail.trim(),
+                          password: syncPassword,
+                        });
+                        setSyncLoading(false);
+                        if (error) setSyncMessage(error.message);
+                        else if (data.user) setSyncUser(data.user);
+                      }}
+                      disabled={syncLoading || !syncEmail.trim() || !syncPassword}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+                    >
+                      {syncLoading ? "登入中…" : "登入"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const supabase = createClient();
+                        if (!supabase || !syncEmail.trim() || !syncPassword) return;
+                        setSyncLoading(true);
+                        setSyncMessage(null);
+                        const { error } = await supabase.auth.signUp({
+                          email: syncEmail.trim(),
+                          password: syncPassword,
+                        });
+                        setSyncLoading(false);
+                        if (error) setSyncMessage(error.message);
+                        else setSyncMessage("註冊成功，請用上方「登入」。");
+                      }}
+                      disabled={syncLoading || !syncEmail.trim() || !syncPassword}
+                      className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                      註冊
+                    </button>
+                  </div>
+                  <p className="text-xs text-zinc-500">不用收信、不受發信額度限制，手機與電腦用同一組帳密即可。</p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    type="email"
+                    value={syncEmail}
+                    onChange={(e) => setSyncEmail(e.target.value)}
+                    placeholder="Email"
+                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+                  />
+                  <button
+                    onClick={async () => {
+                      const supabase = createClient();
+                      if (!supabase || !syncEmail.trim()) return;
+                      setSyncLoading(true);
+                      setSyncMessage(null);
+                      const baseUrl =
+                        (typeof window !== "undefined" && process.env.NEXT_PUBLIC_APP_URL) ||
+                        (typeof window !== "undefined" ? window.location.origin : "") ||
+                        "";
+                      const { error } = await supabase.auth.signInWithOtp({
+                        email: syncEmail.trim(),
+                        options: { emailRedirectTo: `${baseUrl}/auth/callback?next=/settings` },
+                      });
+                      setSyncLoading(false);
+                      if (error) {
+                        const msg = error.message || "";
+                        if (msg.toLowerCase().includes("rate limit") || msg.includes("429")) {
+                          setSyncMessage("發送次數過多：同一信箱需間隔約 1 分鐘；Supabase 免費額度每小時約 2 封，請稍後再試或設定自訂 SMTP。");
+                        } else {
+                          setSyncMessage(error.message);
+                        }
+                      } else {
+                        setSyncMessage("已發送登入連結到你的信箱，請點擊連結完成登入。");
+                      }
+                    }}
+                    disabled={syncLoading || !syncEmail.trim()}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    {syncLoading ? "發送中…" : "發送登入連結"}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2">
