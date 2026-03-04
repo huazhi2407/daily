@@ -23,6 +23,8 @@
 ```env
 NEXT_PUBLIC_SUPABASE_URL=你的_Project_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY=你的_anon_key
+# 登入連結導向用（信箱裡的連結會指向此網址，手機點連結時才能正確開啟）
+NEXT_PUBLIC_APP_URL=https://你的正式站網域
 ```
 
 ### 3. 建立資料表
@@ -75,3 +77,12 @@ create policy "Users can delete own data"
 
 - 若未設定 Supabase 或未登入，app 仍只使用本機 localStorage，不影響現有使用。
 - 登出後，該裝置會恢復為本機儲存；再次登入會改回雲端資料。
+
+## 若出現「登入連結無效或已過期」
+
+1. **Redirect URLs** 必須與實際網址完全一致：  
+   Supabase → **Authentication** → **URL Configuration** → **Redirect URLs** 加入：
+   - 本機：`http://localhost:3000/auth/callback`
+   - 正式站：`https://daily-two-navy.vercel.app/auth/callback`（與你實際網域一致）
+2. **連結有效期限** 約 1 小時，過期需重新按「發送登入連結」。
+3. 點連結時請用**同一個瀏覽器／裝置**開 app（例如本機發送連結就在本機點、同一台電腦）。

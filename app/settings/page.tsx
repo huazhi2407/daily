@@ -165,10 +165,15 @@ export default function SettingsPage() {
                     if (!supabase || !syncEmail.trim()) return;
                     setSyncLoading(true);
                     setSyncMessage(null);
+                    // 用正式站網址當導向，信箱裡的連結在手機點開才能正確跳到 app（若用 localhost 手機無法開）
+                    const baseUrl =
+                      (typeof window !== "undefined" && process.env.NEXT_PUBLIC_APP_URL) ||
+                      (typeof window !== "undefined" ? window.location.origin : "") ||
+                      "";
                     const { error } = await supabase.auth.signInWithOtp({
                       email: syncEmail.trim(),
                       options: {
-                        emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback?next=/settings`,
+                        emailRedirectTo: `${baseUrl}/auth/callback?next=/settings`,
                       },
                     });
                     setSyncLoading(false);
