@@ -234,7 +234,7 @@ function DayTimeline({
   googleEvents: Array<{ id: string; summary: string; start: string; end: string; htmlLink?: string }>;
   onSyncTaskToGoogle?: (task: Task, start: Date, end: Date) => Promise<void>;
   onAddGoogleEventToTasks?: (ev: { id: string; summary: string; start: string; end: string; htmlLink?: string }) => Promise<void>;
-  onUpdateTask?: (id: string, updates: { title?: string; dueTime?: Date }) => void | Promise<void>;
+  onUpdateTask?: (id: string, updates: { title?: string; dueTime?: Date }) => void | Promise<unknown>;
 }) {
   /** 已對應到本機任務的 Google 活動不重複顯示（有存 googleEventId 或同標題+同時段視為同一筆） */
   const googleEventsFiltered = useMemo(() => {
