@@ -177,8 +177,16 @@ export default function SettingsPage() {
                       },
                     });
                     setSyncLoading(false);
-                    if (error) setSyncMessage(error.message);
-                    else setSyncMessage("已發送登入連結到你的信箱，請點擊連結完成登入。");
+                    if (error) {
+                      const msg = error.message || "";
+                      if (msg.toLowerCase().includes("rate limit") || msg.includes("429")) {
+                        setSyncMessage("發送次數過多：同一信箱需間隔約 1 分鐘；Supabase 免費額度每小時約 2 封，請稍後再試或設定自訂 SMTP。");
+                      } else {
+                        setSyncMessage(error.message);
+                      }
+                    } else {
+                      setSyncMessage("已發送登入連結到你的信箱，請點擊連結完成登入。");
+                    }
                   }}
                   disabled={syncLoading || !syncEmail.trim()}
                   className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"

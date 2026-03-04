@@ -78,6 +78,18 @@ create policy "Users can delete own data"
 - 若未設定 Supabase 或未登入，app 仍只使用本機 localStorage，不影響現有使用。
 - 登出後，該裝置會恢復為本機儲存；再次登入會改回雲端資料。
 
+## 若出現「Email rate limit exceeded」
+
+Supabase 內建信箱有發送上限，避免濫用：
+
+- **同一信箱**：需間隔約 **1 分鐘** 才能再發一次。
+- **全專案**：約 **2 封／小時**（所有登入連結、重設密碼等合計）。
+
+**處理方式：**
+
+1. **等一下再試**：等 1 分鐘（同信箱）或 1 小時（額度重置）。
+2. **改用自訂 SMTP**（推薦）：在 Supabase 專案 → **Project Settings** → **Authentication** → **SMTP Settings** 設定自己的 SMTP（例如 Gmail、SendGrid、Resend），就不受內建 2 封／小時限制。設定方式見 [Supabase SMTP 文件](https://supabase.com/docs/guides/auth/auth-smtp)。
+
 ## 若出現「登入連結無效或已過期」
 
 1. **Redirect URLs** 必須與實際網址完全一致：  

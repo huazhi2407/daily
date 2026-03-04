@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
  * 魔法連結回調頁：在瀏覽器處理 URL hash (#access_token=...) 或 query (?code=...)，
  * 建立 session 後導向設定頁。Supabase 預設用 hash 傳 token，伺服器收不到，必須在此處理。
  */
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"處理中…" | "登入成功" | "連結無效或已過期">("處理中…");
 
@@ -76,5 +76,19 @@ export default function AuthCallbackPage() {
     <div className="flex min-h-screen items-center justify-center bg-zinc-900 text-zinc-300">
       <p className="text-sm">{status}</p>
     </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-zinc-900 text-zinc-300">
+          <p className="text-sm">處理中…</p>
+        </div>
+      }
+    >
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
