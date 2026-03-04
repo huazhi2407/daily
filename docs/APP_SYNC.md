@@ -65,6 +65,7 @@ create policy "Users can delete own data"
 
 - 在 app **設定** 頁的「帳號與同步」→ 選 **帳號密碼**，輸入 Email 與密碼。
 - 第一次使用請點「註冊」，之後在手機與電腦都點「登入」、輸入同一組帳密即可。
+- 若登入時出現「Invalid login credentials」：可能是密碼打錯，或 Supabase 有開啟「信箱確認」、需先到信箱點確認連結後才能登入。想註冊後直接登入、不收信，可到 Supabase → **Authentication** → **Providers** → **Email** → 關閉 **Confirm email**。
 
 **選用：登入連結（Magic Link）**
 

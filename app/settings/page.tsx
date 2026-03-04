@@ -190,6 +190,10 @@ export default function SettingsPage() {
                       onClick={async () => {
                         const supabase = createClient();
                         if (!supabase || !syncEmail.trim() || !syncPassword) return;
+                        if (syncPassword.length < 6) {
+                          setSyncMessage("密碼至少 6 個字元");
+                          return;
+                        }
                         setSyncLoading(true);
                         setSyncMessage(null);
                         const { data, error } = await supabase.auth.signInWithPassword({
@@ -197,8 +201,14 @@ export default function SettingsPage() {
                           password: syncPassword,
                         });
                         setSyncLoading(false);
-                        if (error) setSyncMessage(error.message);
-                        else if (data.user) setSyncUser(data.user);
+                        if (error) {
+                          const msg = error.message || "";
+                          if (msg.includes("Invalid login credentials")) {
+                            setSyncMessage("帳號或密碼錯誤，請確認 Email 與密碼（至少 6 字元）；若尚未註冊請先點「註冊」。");
+                          } else {
+                            setSyncMessage(error.message);
+                          }
+                        } else if (data.user) setSyncUser(data.user);
                       }}
                       disabled={syncLoading || !syncEmail.trim() || !syncPassword}
                       className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
@@ -209,15 +219,29 @@ export default function SettingsPage() {
                       onClick={async () => {
                         const supabase = createClient();
                         if (!supabase || !syncEmail.trim() || !syncPassword) return;
+                        if (syncPassword.length < 6) {
+                          setSyncMessage("密碼至少 6 個字元");
+                          return;
+                        }
                         setSyncLoading(true);
                         setSyncMessage(null);
-                        const { error } = await supabase.auth.signUp({
+                        const { data, error } = await supabase.auth.signUp({
                           email: syncEmail.trim(),
                           password: syncPassword,
                         });
                         setSyncLoading(false);
-                        if (error) setSyncMessage(error.message);
-                        else setSyncMessage("註冊成功，請用上方「登入」。");
+                        if (error) {
+                          if ((error.message || "").toLowerCase().includes("already registered")) {
+                            setSyncMessage("此 Email 已註冊，請直接點「登入」。");
+                          } else {
+                            setSyncMessage(error.message);
+                          }
+                        } else if (data.user) {
+                          setSyncUser(data.user);
+                          setSyncMessage("註冊成功，已自動登入。");
+                        } else {
+                          setSyncMessage("註冊成功。若需信箱確認，請到信箱點連結後再點「登入」。");
+                        }
                       }}
                       disabled={syncLoading || !syncEmail.trim() || !syncPassword}
                       className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
@@ -225,7 +249,7 @@ export default function SettingsPage() {
                       註冊
                     </button>
                   </div>
-                  <p className="text-xs text-zinc-500">不用收信、不受發信額度限制，手機與電腦用同一組帳密即可。</p>
+                  <p className="text-xs text-zinc-500">密碼至少 6 字元。不用收信、不受發信額度限制，手機與電腦用同一組帳密即可。</p>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
