@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { PageShell } from "@/components/layout";
 import { useQuickLinks, useReminders } from "@/hooks";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 export default function SettingsPage() {
   const { links, addLink, deleteLink } = useQuickLinks();
@@ -11,6 +13,43 @@ export default function SettingsPage() {
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
+  const [syncUser, setSyncUser] = useState<User | null | undefined>(undefined);
+  const [syncEmail, setSyncEmail] = useState("");
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const supabase = createClient();
+      if (!supabase) {
+        if (mounted) setSyncUser(null);
+        return;
+      }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (mounted) setSyncUser(user ?? null);
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (mounted) setSyncUser(user ?? null);
+        });
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    if (params?.get("auth") === "error") setSyncMessage("登入連結無效或已過期");
+  }, []);
 
   const handleAddLink = async () => {
     if (!label.trim() || !url.trim()) return;
@@ -101,9 +140,72 @@ export default function SettingsPage() {
         </section>
 
         <section className="rounded-xl border border-zinc-800 p-4">
+          <h2 className="mb-3 text-sm font-medium text-zinc-400">帳號與同步（app 與 app）</h2>
+          <p className="mb-3 text-sm text-zinc-500">
+            登入後，手機與電腦使用同一帳號即可同步任務、看板、快速連結等資料。詳細設定見專案 <code className="text-zinc-400">docs/APP_SYNC.md</code>。
+          </p>
+          {syncUser === undefined ? (
+            <p className="text-sm text-zinc-500">載入中…</p>
+          ) : syncUser === null ? (
+            <div className="space-y-2">
+              {syncMessage && (
+                <p className="text-sm text-amber-400">{syncMessage}</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="email"
+                  value={syncEmail}
+                  onChange={(e) => setSyncEmail(e.target.value)}
+                  placeholder="Email"
+                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={async () => {
+                    const supabase = createClient();
+                    if (!supabase || !syncEmail.trim()) return;
+                    setSyncLoading(true);
+                    setSyncMessage(null);
+                    const { error } = await supabase.auth.signInWithOtp({
+                      email: syncEmail.trim(),
+                      options: {
+                        emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback?next=/settings`,
+                      },
+                    });
+                    setSyncLoading(false);
+                    if (error) setSyncMessage(error.message);
+                    else setSyncMessage("已發送登入連結到你的信箱，請點擊連結完成登入。");
+                  }}
+                  disabled={syncLoading || !syncEmail.trim()}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  {syncLoading ? "發送中…" : "發送登入連結"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm text-zinc-300">
+                已登入 · {syncUser.email ?? "—"}
+              </span>
+              <button
+                onClick={async () => {
+                  const supabase = createClient();
+                  if (!supabase) return;
+                  await supabase.auth.signOut();
+                  setSyncUser(null);
+                }}
+                className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800"
+              >
+                登出
+              </button>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 p-4">
           <h2 className="mb-2 text-sm font-medium text-zinc-400">關於</h2>
           <p className="text-sm text-zinc-500">
-            個人生活 OS · 資料儲存於 localStorage
+            個人生活 OS · {syncUser ? "資料已同步至雲端" : "資料儲存於本機（登入後可跨裝置同步）"}
           </p>
         </section>
       </div>

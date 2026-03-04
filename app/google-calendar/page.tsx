@@ -17,6 +17,7 @@ function GoogleCalendarContent() {
     disconnect,
     createEvent,
     fetchEvents,
+    getEvent,
     error: syncError,
   } = useGoogleCalendarSync();
   const { embedUrl, setEmbedUrl } = useGoogleCalendarEmbed();
@@ -29,6 +30,7 @@ function GoogleCalendarContent() {
   const [importLoading, setImportLoading] = useState(false);
   const [addingEventId, setAddingEventId] = useState<string | null>(null);
   const [addingAll, setAddingAll] = useState(false);
+  const [refreshingTaskId, setRefreshingTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     if (embedUrl != null) setEmbedInput(embedUrl);
@@ -152,6 +154,27 @@ function GoogleCalendarContent() {
     }
   }, [importEventsFiltered, addTask]);
 
+  /** 從 Google 日曆拉回最新資料，更新 app 內該任務 */
+  const handleRefreshFromGoogle = useCallback(
+    async (task: Task) => {
+      if (!task.googleEventId) return;
+      setRefreshingTaskId(task.id);
+      try {
+        const ev = await getEvent(task.googleEventId);
+        if (ev) {
+          await updateTask(task.id, {
+            title: ev.summary,
+            dueTime: new Date(ev.start),
+            googleEventLink: ev.htmlLink,
+          });
+        }
+      } finally {
+        setRefreshingTaskId(null);
+      }
+    },
+    [getEvent, updateTask]
+  );
+
   const formatDue = (t: Task) =>
     t.dueTime ? t.dueTime.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 
@@ -217,22 +240,33 @@ function GoogleCalendarContent() {
                   {syncedTasks.map((t) => (
                     <li
                       key={t.id}
-                      className="flex items-center justify-between rounded-lg border border-zinc-700/60 px-3 py-2 text-sm"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-700/60 px-3 py-2 text-sm"
                     >
                       <span className="text-zinc-200">{t.title}</span>
                       <span className="text-zinc-500">{formatDue(t)}</span>
-                      {t.googleEventLink ? (
-                        <a
-                          href={t.googleEventLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-indigo-400 hover:underline"
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRefreshFromGoogle(t)}
+                          disabled={!!refreshingTaskId}
+                          className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+                          title="若在手機或 Google 日曆改過，按此將變更拉回 app"
                         >
-                          Google 開啟
-                        </a>
-                      ) : (
-                        <span className="text-zinc-500">已同步</span>
-                      )}
+                          {refreshingTaskId === t.id ? "更新中…" : "從 Google 更新"}
+                        </button>
+                        {t.googleEventLink ? (
+                          <a
+                            href={t.googleEventLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-indigo-400 hover:underline"
+                          >
+                            Google 開啟
+                          </a>
+                        ) : (
+                          <span className="text-zinc-500">已同步</span>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>

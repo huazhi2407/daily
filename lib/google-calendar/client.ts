@@ -53,12 +53,15 @@ export async function getCalendarClient(
   res: { setHeader: (name: string, value: string) => void }
 ): Promise<{
   listEvents: (timeMin: string, timeMax: string) => Promise<CalendarEvent[]>;
+  getEvent: (eventId: string) => Promise<CalendarEvent | null>;
   createEvent: (
     summary: string,
     start: Date,
     end: Date,
     recurrence?: { type: "daily" } | { type: "weekly"; weekdays: number[] }
   ) => Promise<CalendarEvent | null>;
+  updateEvent: (eventId: string, summary: string, start: Date, end: Date) => Promise<CalendarEvent | null>;
+  deleteEvent: (eventId: string) => Promise<boolean>;
 } | null> {
   const secret = process.env.CALENDAR_TOKEN_SECRET;
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -117,6 +120,27 @@ export async function getCalendarClient(
         };
       });
     },
+    async getEvent(eventId: string): Promise<CalendarEvent | null> {
+      try {
+        const r = await calendar.events.get({
+          calendarId: "primary",
+          eventId,
+        });
+        const ev = r.data;
+        if (!ev.id) return null;
+        const start = ev.start?.dateTime ?? ev.start?.date ?? "";
+        const end = ev.end?.dateTime ?? ev.end?.date ?? "";
+        return {
+          id: ev.id,
+          summary: ev.summary ?? "(無標題)",
+          start,
+          end,
+          htmlLink: ev.htmlLink ?? undefined,
+        };
+      } catch {
+        return null;
+      }
+    },
     async createEvent(
       summary: string,
       start: Date,
@@ -151,6 +175,48 @@ export async function getCalendarClient(
         end: endStr,
         htmlLink: ev.htmlLink ?? undefined,
       };
+    },
+    async updateEvent(
+      eventId: string,
+      summary: string,
+      start: Date,
+      end: Date
+    ): Promise<CalendarEvent | null> {
+      try {
+        const r = await calendar.events.patch({
+          calendarId: "primary",
+          eventId,
+          requestBody: {
+            summary,
+            start: { dateTime: start.toISOString(), timeZone: "Asia/Taipei" },
+            end: { dateTime: end.toISOString(), timeZone: "Asia/Taipei" },
+          },
+        });
+        const ev = r.data;
+        if (!ev.id) return null;
+        const startStr = ev.start?.dateTime ?? ev.start?.date ?? "";
+        const endStr = ev.end?.dateTime ?? ev.end?.date ?? "";
+        return {
+          id: ev.id,
+          summary: ev.summary ?? summary,
+          start: startStr,
+          end: endStr,
+          htmlLink: ev.htmlLink ?? undefined,
+        };
+      } catch {
+        return null;
+      }
+    },
+    async deleteEvent(eventId: string): Promise<boolean> {
+      try {
+        await calendar.events.delete({
+          calendarId: "primary",
+          eventId,
+        });
+        return true;
+      } catch {
+        return false;
+      }
     },
   };
 }

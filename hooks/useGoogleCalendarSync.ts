@@ -59,6 +59,22 @@ export function useGoogleCalendarSync() {
     }
   }, []);
 
+  const getEvent = useCallback(async (eventId: string): Promise<GoogleCalendarEvent | null> => {
+    setError(null);
+    try {
+      const res = await fetcher(`/api/calendar/events?eventId=${encodeURIComponent(eventId)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "無法取得");
+        return null;
+      }
+      return data.event as GoogleCalendarEvent;
+    } catch (e) {
+      setError((e as Error).message);
+      return null;
+    }
+  }, []);
+
   const createEvent = useCallback(
     async (
       summary: string,
@@ -93,6 +109,44 @@ export function useGoogleCalendarSync() {
     []
   );
 
+  const updateEvent = useCallback(
+    async (eventId: string, summary: string, start: Date, end: Date) => {
+      setError(null);
+      const res = await fetcher("/api/calendar/events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId,
+          summary,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "更新失敗");
+        return null;
+      }
+      return data.event as GoogleCalendarEvent;
+    },
+    []
+  );
+
+  const deleteEvent = useCallback(async (eventId: string) => {
+    setError(null);
+    const res = await fetcher("/api/calendar/events", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "刪除失敗");
+      return false;
+    }
+    return !!data.ok;
+  }, []);
+
   const disconnect = useCallback(async () => {
     await fetcher("/api/calendar/disconnect", { method: "POST" });
     setConnected(false);
@@ -106,7 +160,10 @@ export function useGoogleCalendarSync() {
     error,
     checkStatus,
     fetchEvents,
+    getEvent,
     createEvent,
+    updateEvent,
+    deleteEvent,
     disconnect,
   };
 }

@@ -30,7 +30,7 @@ export default function TasksPage() {
     uncompleteTask,
     deleteTask,
   } = useTasks();
-  const { connected: syncConnected, createEvent } = useGoogleCalendarSync();
+  const { connected: syncConnected, createEvent, updateEvent } = useGoogleCalendarSync();
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState<TaskCategory>("backlog");
   const [newDueDateTime, setNewDueDateTime] = useState("");
@@ -82,6 +82,21 @@ export default function TasksPage() {
       if (ev?.id) await updateTask(task.id, { googleEventId: ev.id, googleEventLink: ev.htmlLink });
     },
     [syncConnected, createEvent, updateTask]
+  );
+
+  /** 已同步任務改到期日時，一併更新 Google 日曆 */
+  const handleUpdateDueTime = useCallback(
+    async (task: Task, dueTime: Date | undefined) => {
+      await updateTask(task.id, { dueTime });
+      if (syncConnected && task.googleEventId && dueTime) {
+        const start = task.repeat
+          ? getEffectiveDueTime({ ...task, dueTime }, dueTime)
+          : dueTime;
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        await updateEvent(task.googleEventId, task.title, start, end);
+      }
+    },
+    [syncConnected, updateTask, updateEvent]
   );
 
   return (
@@ -190,7 +205,7 @@ export default function TasksPage() {
                           onComplete={() => completeTask(t.id)}
                           onDelete={() => deleteTask(t.id)}
                           onMoveCategory={(c) => moveCategory(t.id, c)}
-                          onUpdateDueTime={(dueTime) => updateTask(t.id, { dueTime })}
+                          onUpdateDueTime={(dueTime) => handleUpdateDueTime(t, dueTime)}
                           onUpdateRepeat={(repeat) => updateTask(t.id, { repeat })}
                           onUpdateSyncToGoogle={(syncToGoogle) => updateTask(t.id, { syncToGoogle })}
                           onSyncToGoogleNow={syncConnected ? handleSyncToGoogleNow : undefined}
